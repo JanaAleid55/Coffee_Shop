@@ -9,14 +9,24 @@ from .auth.auth import AuthError, requires_auth
 
 app = Flask(__name__)
 setup_db(app)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8100')
+    response.headers.add(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization')
+    response.headers.add(
+        'Access-Control-Allow-Methods',
+        " GET, POST, PATCH, DELETE, OPTIONS")
+    return response
 '''
 @TODO uncomment the following line to initialize the datbase
 !! NOTE THIS WILL DROP ALL RECORDS AND START YOUR DB FROM SCRATCH
 !! NOTE THIS MUST BE UNCOMMENTED ON FIRST RUN
 '''
-db_drop_and_create_all()
+# db_drop_and_create_all()
 
 ## ROUTES
 '''
@@ -29,7 +39,7 @@ db_drop_and_create_all()
 '''
 @app.route('/drinks', methods=['GET'])
 @requires_auth('get:drinks')
-def get_questions(token):
+def get_drinks(token):
     all_drinks = Drink.query.all()
     if len(all_drinks) == 0:
         abort(404)
@@ -47,18 +57,19 @@ def get_questions(token):
     returns status code 200 and json {"success": True, "drinks": drinks} where drinks is the list of drinks
         or appropriate status code indicating reason for failure
 '''
-@app.route('/drinks-detail')
+@app.route('/drinks-detail', methods=['GET'])
 @requires_auth('get:drinks-detail')
 def get_drinks_details(token):
     all_drinks = Drink.query.all()
+    print(all_drinks)
     if len(all_drinks) == 0:
         abort(404)
 
-        drinks = { drink.long() for drink in all_drinks }
-        return jsonify({
-            'success': True,
-            'drinks': drinks
-        }), 200
+    drinks = { drink.long() for drink in all_drinks }
+    return jsonify({
+        'success': True,
+        'drinks': drinks
+    }), 200
 
 '''
 @TODO implement endpoint
@@ -74,20 +85,21 @@ def get_drinks_details(token):
 def post_drink(token):
     if not request.method == 'POST':
         abort(405)
-
     body = request.get_json()
     title = body.get('title', None)
     recipe = body.get('recipe', None)
     try:
-        drink = Drink(title, recipe)
+        drink = Drink(title, json.dumps(recipe))
         drink.insert()
-
         return jsonify({
-            'success': True,
-            'drinks': [drink.long()]
+        'success': True,
+        'drinks': [drink.long()]
         }), 200
-    except BaseException:
-        abort(422)
+    except Exception as e:
+        print(e)
+        abort(400)
+
+    
 
 '''
 @TODO implement endpoint
@@ -115,7 +127,7 @@ def edit_drink(token, drink_id):
         if title is not None:
             drink.title = title
         if recipe is not None:
-            drink.recipe = recipe
+            drink.recipe = json.dumps(recipe)
         drink.update()
         return jsonify({
             'success': True, 
@@ -203,7 +215,7 @@ def auth_error(e):
     return jsonify({
                     "success": False, 
                     "error": e.status_code,
-                    "message": e.error
+                    "message": e.error['code']
                     }), e.status_code
 
 '''
